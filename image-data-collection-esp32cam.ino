@@ -7,32 +7,18 @@
 #include <SPIFFS.h>
 #include <FS.h>
 #include <Firebase_ESP_Client.h>
-
-//Provide the token generation process info.
-#include <addons/TokenHelper.h>
+#include <Wire.h>
+#include "SSD1306.h" 
+#include <addons/TokenHelper.h> //Provide the token generation process info.
 
 #include "config.h"
+#include "OV2640-module-pins.h"
+
+// for 128x64 displays:
+SSD1306 display(0x3c, 14, 15);  // ADDRESS, SDA, SCL
 
 // Photo File Name to save in SPIFFS
 #define FILE_PHOTO "/data/photo.jpg"
-
-// OV2640 camera module pins (CAMERA_MODEL_AI_THINKER)
-#define PWDN_GPIO_NUM     32
-#define RESET_GPIO_NUM    -1
-#define XCLK_GPIO_NUM      0
-#define SIOD_GPIO_NUM     26
-#define SIOC_GPIO_NUM     27
-#define Y9_GPIO_NUM       35
-#define Y8_GPIO_NUM       34
-#define Y7_GPIO_NUM       39
-#define Y6_GPIO_NUM       36
-#define Y5_GPIO_NUM       21
-#define Y4_GPIO_NUM       19
-#define Y3_GPIO_NUM       18
-#define Y2_GPIO_NUM        5
-#define VSYNC_GPIO_NUM    25
-#define HREF_GPIO_NUM     23
-#define PCLK_GPIO_NUM     22
 
 boolean takeNewPhoto = true;
 
@@ -57,6 +43,9 @@ void capturePhotoSaveSpiffs( void ) {
   do {
     // Take a photo with the camera
     Serial.println("Taking a photo...");
+    display.clear();
+    display.drawString(0, 0, "Taking a photo...");
+    display.display();
 
     fb = esp_camera_fb_get();
     if (!fb) {
@@ -92,6 +81,9 @@ void initWiFi(){
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.println("Connecting to WiFi...");
+    display.clear();
+    display.drawString(0, 0, "Connecting to WiFi...");
+    display.display();
   }
 }
 
@@ -103,6 +95,9 @@ void initSPIFFS(){
   else {
     delay(500);
     Serial.println("SPIFFS mounted successfully");
+    display.clear();
+    display.drawString(0, 0, "SPIFFS mounted successfully");
+    display.display();
   }
 }
 
@@ -150,12 +145,15 @@ void initCamera(){
 void setup() {
   // Serial port for debugging purposes
   Serial.begin(115200);
+  display.init();
+  
   initWiFi();
   initSPIFFS();
+  
   // Turn-off the 'brownout detector'
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   initCamera();
-
+  
   //Firebase
   // Assign the api key
   configF.api_key = API_KEY;
