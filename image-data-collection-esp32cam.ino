@@ -10,15 +10,35 @@
 #include <Wire.h>
 #include "SSD1306.h" 
 #include <addons/TokenHelper.h> //Provide the token generation process info.
+#include "time.h"
 
 #include "config.h"
 #include "OV2640-module-pins.h"
 
-// for 128x64 displays:
-SSD1306 display(0x3c, 14, 15);  // ADDRESS, SDA, SCL
+SSD1306 display(0x3c, 14, 15);  // 128x64 oled displays (ADDRESS, SDA, SCL)
 
-// Photo File Name to save in SPIFFS
-#define FILE_PHOTO "/data/photo.jpg"
+// Datetime config for gmt +8
+const char* ntpServer = "asia.pool.ntp.org";
+const long  gmtOffset_sec = 28800;
+const int   daylightOffset_sec = 0;
+
+char generateNameByDatetime() {
+  struct tm timeinfo;
+  
+  if(!getLocalTime(&timeinfo)){
+    Serial.println("Failed to obtain time");
+    return 0;
+  }
+
+  char dateTime[30];
+  strftime(dateTime,30, "%FT%T%z", &timeinfo);
+  // char* extension = ".jpg";
+  // char* FILE_PHOTO = dateTime+extension; // Img File Name to save in SPIFFS
+  return dateTime + ".jpg";
+
+}
+
+// #define FILE_PHOTO "/data/photo.jpg" 
 
 boolean takeNewPhoto = true;
 
@@ -43,9 +63,7 @@ void capturePhotoSaveSpiffs( void ) {
   do {
     // Take a photo with the camera
     Serial.println("Taking a photo...");
-    display.clear();
-    display.drawString(0, 0, "Taking a photo...");
-    display.display();
+    oledDisplay("Taking a photo...");
 
     fb = esp_camera_fb_get();
     if (!fb) {
@@ -81,9 +99,7 @@ void initWiFi(){
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.println("Connecting to WiFi...");
-    display.clear();
-    display.drawString(0, 0, "Connecting to WiFi...");
-    display.display();
+    oledDisplay("Connecting to WiFi...");
   }
 }
 
@@ -95,9 +111,7 @@ void initSPIFFS(){
   else {
     delay(500);
     Serial.println("SPIFFS mounted successfully");
-    display.clear();
-    display.drawString(0, 0, "SPIFFS mounted successfully");
-    display.display();
+    oledDisplay("SPIFFS mounted successfully");
   }
 }
 
@@ -142,22 +156,26 @@ void initCamera(){
   } 
 }
 
+void oledDisplay(const char* message) {
+  display.clear();
+  display.drawString(0, 0, message);
+  display.display();
+}
+
 void setup() {
-  // Serial port for debugging purposes
-  Serial.begin(115200);
+  Serial.begin(115200); // Serial port for debugging purposes
   display.init();
+
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer); // init time
   
   initWiFi();
   initSPIFFS();
   
-  // Turn-off the 'brownout detector'
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // Turn-off the 'brownout detector'
   initCamera();
   
-  //Firebase
-  // Assign the api key
+  //Firebase  
   configF.api_key = API_KEY;
-  //Assign the user sign in credentials
   auth.user.email = USER_EMAIL;
   auth.user.password = USER_PASSWORD;
   //Assign the callback function for the long running token generation task
@@ -172,15 +190,19 @@ void loop() {
     capturePhotoSaveSpiffs();
     takeNewPhoto = false;
   }
+
   delay(1);
+  
   if (Firebase.ready() && !taskCompleted){
     taskCompleted = true;
     Serial.print("Uploading picture... ");
+    oledDisplay("Uploading picture... ");
 
     //MIME type should be valid to avoid the download problem.
     //The file systems for flash and SD/SDMMC can be changed in FirebaseFS.h.
     if (Firebase.Storage.upload(&fbdo, STORAGE_BUCKET_ID /* Firebase Storage bucket id */, FILE_PHOTO /* path to local file */, mem_storage_type_flash /* memory storage type, mem_storage_type_flash and mem_storage_type_sd */, FILE_PHOTO /* path of remote file stored in the bucket */, "image/jpeg" /* mime type */)){
       Serial.printf("\nDownload URL: %s\n", fbdo.downloadURL().c_str());
+      oledDisplay("Upload success!");
     }
     else{
       Serial.println(fbdo.errorReason());
